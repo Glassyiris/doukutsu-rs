@@ -1,15 +1,4 @@
 #[macro_use]
-extern crate bitflags;
-#[macro_use]
-extern crate gfx;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate smart_default;
-extern crate strum;
-#[macro_use]
 extern crate strum_macros;
 
 use std::{env, mem};
@@ -18,47 +7,33 @@ use std::time::Instant;
 
 use log::*;
 use pretty_env_logger::env_logger::Env;
-use winit::{ElementState, Event, KeyboardInput, WindowEvent};
+use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event_loop::{ControlFlow, EventLoop};
 
-use crate::caret::{Caret, CaretType};
 use crate::common::Direction;
-use crate::engine_constants::EngineConstants;
-use crate::ggez::{Context, ContextBuilder, event, filesystem, GameResult};
-use crate::ggez::conf::{WindowMode, WindowSetup};
-use crate::ggez::event::{KeyCode, KeyMods};
-use crate::ggez::graphics;
-use crate::ggez::graphics::DrawParam;
-use crate::ggez::input::keyboard;
-use crate::ggez::mint::ColumnMatrix4;
-use crate::ggez::nalgebra::Vector2;
-use crate::live_debugger::LiveDebugger;
+use crate::context::Context;
+use crate::error::GameResult;
+use crate::game::caret::{Caret, CaretType};
+use crate::game::engine_constants::EngineConstants;
+use crate::game::stage::StageData;
 use crate::rng::RNG;
 use crate::scene::loading_scene::LoadingScene;
 use crate::scene::Scene;
 use crate::sound::SoundManager;
-use crate::stage::StageData;
 use crate::texture_set::TextureSet;
 use crate::ui::UI;
 
-mod caret;
 mod common;
-mod engine_constants;
-mod entity;
-mod enemy;
-mod frame;
-mod ggez;
+mod context;
+mod error;
+mod game;
 mod live_debugger;
-mod map;
-mod player;
-mod player_hit;
+mod renderer;
 mod rng;
 mod scene;
-mod stage;
 mod sound;
-mod text_script;
 mod texture_set;
 mod ui;
-mod weapon;
 
 bitfield! {
   pub struct KeyState(u16);
@@ -86,8 +61,6 @@ struct Game {
     scene: Option<Box<dyn Scene>>,
     state: SharedGameState,
     ui: UI,
-    scaled_matrix: ColumnMatrix4<f32>,
-    def_matrix: ColumnMatrix4<f32>,
 }
 
 pub struct SharedGameState {
@@ -150,11 +123,7 @@ impl Game {
 
         let s = Game {
             scene: None,
-            scaled_matrix: DrawParam::new()
-                .scale(Vector2::new(scale, scale))
-                .to_matrix(),
             ui: UI::new(ctx)?,
-            def_matrix: DrawParam::new().to_matrix(),
             state: SharedGameState {
                 flags: GameFlags(0),
                 game_rng: RNG::new(0),
@@ -178,7 +147,7 @@ impl Game {
         Ok(s)
     }
 
-    fn update(&mut self, ctx: &mut Context) -> GameResult {
+    fn tick(&mut self, ctx: &mut Context) -> GameResult {
         if let Some(scene) = self.scene.as_mut() {
             scene.tick(&mut self.state, ctx)?;
         }
@@ -202,37 +171,37 @@ impl Game {
         Ok(())
     }
 
-    fn key_down_event(&mut self, _ctx: &mut Context, key_code: KeyCode, _key_mod: KeyMods, repeat: bool) {
+    fn key_down_event(&mut self, _ctx: &mut Context, key_code: VirtualKeyCode, repeat: bool) {
         if repeat { return; }
 
         // todo: proper keymaps?
         let state = &mut self.state;
         match key_code {
-            KeyCode::Left => { state.key_state.set_left(true) }
-            KeyCode::Right => { state.key_state.set_right(true) }
-            KeyCode::Up => { state.key_state.set_up(true) }
-            KeyCode::Down => { state.key_state.set_down(true) }
-            KeyCode::Z => { state.key_state.set_jump(true) }
-            KeyCode::X => { state.key_state.set_fire(true) }
-            KeyCode::A => { state.key_state.set_weapon_prev(true) }
-            KeyCode::S => { state.key_state.set_weapon_next(true) }
+            VirtualKeyCode::Left => { state.key_state.set_left(true) }
+            VirtualKeyCode::Right => { state.key_state.set_right(true) }
+            VirtualKeyCode::Up => { state.key_state.set_up(true) }
+            VirtualKeyCode::Down => { state.key_state.set_down(true) }
+            VirtualKeyCode::Z => { state.key_state.set_jump(true) }
+            VirtualKeyCode::X => { state.key_state.set_fire(true) }
+            VirtualKeyCode::A => { state.key_state.set_weapon_prev(true) }
+            VirtualKeyCode::S => { state.key_state.set_weapon_next(true) }
             _ => {}
         }
     }
 
 
-    fn key_up_event(&mut self, _ctx: &mut Context, key_code: KeyCode, _key_mod: KeyMods) {
+    fn key_up_event(&mut self, _ctx: &mut Context, key_code: VirtualKeyCode) {
         let state = &mut self.state;
 
         match key_code {
-            KeyCode::Left => { state.key_state.set_left(false) }
-            KeyCode::Right => { state.key_state.set_right(false) }
-            KeyCode::Up => { state.key_state.set_up(false) }
-            KeyCode::Down => { state.key_state.set_down(false) }
-            KeyCode::Z => { state.key_state.set_jump(false) }
-            KeyCode::X => { state.key_state.set_fire(false) }
-            KeyCode::A => { state.key_state.set_weapon_prev(false) }
-            KeyCode::S => { state.key_state.set_weapon_next(false) }
+            VirtualKeyCode::Left => { state.key_state.set_left(false) }
+            VirtualKeyCode::Right => { state.key_state.set_right(false) }
+            VirtualKeyCode::Up => { state.key_state.set_up(false) }
+            VirtualKeyCode::Down => { state.key_state.set_down(false) }
+            VirtualKeyCode::Z => { state.key_state.set_jump(false) }
+            VirtualKeyCode::X => { state.key_state.set_fire(false) }
+            VirtualKeyCode::A => { state.key_state.set_weapon_prev(false) }
+            VirtualKeyCode::S => { state.key_state.set_weapon_next(false) }
             _ => {}
         }
     }
@@ -252,51 +221,44 @@ pub fn main() -> GameResult {
     info!("Resource directory: {:?}", resource_dir);
     info!("Initializing engine...");
 
-    let cb = ContextBuilder::new("doukutsu-rs")
-        .window_setup(WindowSetup::default().title("Cave Story (doukutsu-rs)"))
-        .window_mode(WindowMode::default().dimensions(854.0, 480.0))
-        .add_resource_path(resource_dir);
-
-    let (ctx, event_loop) = &mut cb.build()?;
+    let event_loop = EventLoop::new();
+    let ctx = &mut Context::new();
     let game = &mut Game::new(ctx)?;
     game.state.next_scene = Some(Box::new(LoadingScene::new()));
 
-    while ctx.continuing {
-        ctx.timer_context.tick();
-        event_loop.poll_events(|event| {
-            ctx.process_event(&event);
-            game.ui.handle_events(ctx, &event);
+    event_loop.run(move |event, _, control_flow| {
+        game.ui.handle_events(ctx, &event);
 
-            match event {
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::CloseRequested => event::quit(ctx),
-                    WindowEvent::KeyboardInput {
-                        input:
-                        KeyboardInput {
-                            state: el_state,
-                            virtual_keycode: Some(keycode),
-                            modifiers,
-                            ..
-                        },
+        match event {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::KeyboardInput {
+                    input:
+                    KeyboardInput {
+                        state: el_state,
+                        virtual_keycode: Some(keycode),
                         ..
-                    } => {
-                        match el_state {
-                            ElementState::Pressed => {
-                                let repeat = keyboard::is_key_repeated(ctx);
-                                game.key_down_event(ctx, keycode, modifiers.into(), repeat);
-                            }
-                            ElementState::Released => {
-                                game.key_up_event(ctx, keycode, modifiers.into());
-                            }
+                    },
+                    ..
+                } => {
+                    match el_state {
+                        ElementState::Pressed => {
+                            ctx.keyboard_mut().set_key_state(keycode, true);
+                            game.key_down_event(ctx, keycode, ctx.keyboard().is_key_repeated());
+                        }
+                        ElementState::Released => {
+                            ctx.keyboard_mut().set_key_state(keycode, false);
+                            game.key_up_event(ctx, keycode);
                         }
                     }
-                    _ => {}
-                },
+                }
                 _ => {}
-            }
-        });
+            },
+            _ => {}
+        }
 
-        game.update(ctx)?;
+
+        game.tick(ctx)?;
         game.draw(ctx)?;
 
         if game.state.next_scene.is_some() {
@@ -305,6 +267,5 @@ pub fn main() -> GameResult {
 
             game.scene.as_mut().unwrap().init(&mut game.state, ctx)?;
         }
-    }
-    Ok(())
+    });
 }

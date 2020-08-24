@@ -13,6 +13,12 @@ doukutsu-rs project does not re-distribute any copyrighted files.
 
 The engine should work fine with [CSE2-Enhanced](https://github.com/Clownacy/CSE2) or [NXEngine(-evo)](https://github.com/nxengine/nxengine-evo) modified freeware data files and [Cave Story+](https://www.nicalis.com/games/cavestory+) (Nicalis commercial release, loading is supported but note we're not going to reverse engineer it or support it's features) data files.
 
+#### Requirements
+
+doukutsu-rs despite being an engine for game released in 2004 and using tiny amount of resources (a little of CPU and <10MB of RAM), targets modern hardware and requires a Vulkan/Metal capable GPU to run. 
+
+OpenGL(ES)/SDL2 backends for older or more exotic (consoles?) hardware are coming soon.
+
 #### Roadmap
 
 - [x] Tilemap and player rendering

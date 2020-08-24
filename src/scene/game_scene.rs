@@ -3,15 +3,14 @@ use log::info;
 use crate::common::Rect;
 use crate::entity::GameEntity;
 use crate::frame::Frame;
-use crate::ggez::{Context, GameResult, timer};
-use crate::ggez::nalgebra::clamp;
 use crate::live_debugger::LiveDebugger;
 use crate::player::Player;
 use crate::scene::Scene;
-use crate::SharedGameState;
+use crate::{SharedGameState, Context};
 use crate::stage::{BackgroundType, Stage};
 use crate::str;
 use crate::ui::{UI, Components};
+use num_traits::clamp;
 
 pub struct GameScene {
     pub tick: usize,
